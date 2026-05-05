@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="팝업POS">
+<title>팝업 행사 주문서</title>
+<style>
+:root{
+  --bg:#F7F3EC;
+  --bg2:#EEE9DF;
+  --card:#FFFFFF;
+  --card2:#F0ECE4;
+  --navy:#2E3D6B;
+  --navy-light:rgba(46,61,107,0.08);
+  --navy-mid:rgba(46,61,107,0.15);
+  --total:#B85535;
+  --total-light:rgba(184,85,53,0.08);
+  --green:#3A7D5A;
+  --green-light:rgba(58,125,90,0.1);
+  --red:#B83535;
+  --red-light:rgba(184,53,53,0.08);
+  --text:#1A1918;
+  --text2:#6B6560;
+  --text3:#A8A29C;
+  --border:#DDD8CF;
+  --border2:#C8C2B8;
+  --shadow:0 1px 6px rgba(0,0,0,0.07),0 2px 16px rgba(0,0,0,0.04);
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.06);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:4px;height:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+input,textarea,select,button{font-family:inherit;outline:none;}
+button{cursor:pointer;}
+
+/* ── LAYOUT ─────────────────────────── */
+.screen{display:none;min-height:100vh;}
+.screen.active{display:flex;flex-direction:column;}
+.scroll-area{flex:1;overflow-y:auto;padding-bottom:calc(80px + var(--safe-b));}
+
+/* ── BUTTONS ─────────────────────────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:700;transition:all .15s;white-space:nowrap;letter-spacing:-.2px;}
+.btn-primary{background:var(--navy);color:#fff;}
+.btn-primary:active{background:#253260;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-ghost{background:var(--card);color:var(--text2);border:1.5px solid var(--border);}
+.btn-ghost:active{background:var(--bg2);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-sm{padding:7px 13px;font-size:12px;border-radius:8px;}
+.btn-block{width:100%;}
+
+/* ── FORM ─────────────────────────────── */
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow-sm);}
+.card-sm{padding:12px;}
+.input{background:var(--bg);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-size:14px;width:100%;transition:border-color .15s;}
+.input:focus{border-color:var(--navy);background:#fff;}
+.input::placeholder{color:var(--text3);}
+.label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;display:block;}
+.form-group{margin-bottom:14px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.select{background:var(--bg);border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-size:14px;width:100%;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B6560' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+.select:focus{border-color:var(--navy);}
+
+/* ── MODAL ────────────────────────────── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(26,25,24,0.55);z-index:100;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);}
+.modal-overlay.show{display:flex;}
+@media(min-width:768px){.modal-overlay{align-items:center;}}
+.modal-box{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:520px;padding:20px;padding-bottom:calc(20px + var(--safe-b));max-height:92vh;overflow-y:auto;box-shadow:0 -4px 30px rgba(0,0,0,0.12);}
+@media(min-width:768px){.modal-box{border-radius:16px;max-height:85vh;margin:20px;}}
+.modal-handle{width:32px;height:3px;background:var(--border2);border-radius:2px;margin:0 auto 16px;}
+.modal-title{font-size:17px;font-weight:800;margin-bottom:16px;color:var(--text);}
+
+/* ── TAGS ─────────────────────────────── */
+.tag-input-wrap{display:flex;flex-wrap:wrap;gap:6px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px;padding:7px 10px;min-height:42px;align-items:center;cursor:text;transition:border-color .15s;}
+.tag-input-wrap:focus-within{border-color:var(--navy);}
+.tag{background:var(--navy-light);border:1px solid var(--navy-mid);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--navy);display:flex;align-items:center;gap:5px;font-weight:600;}
+.tag-del{color:var(--text3);font-size:14px;line-height:1;cursor:pointer;}
+.tag-input{background:none;border:none;color:var(--text);font-size:13px;min-width:80px;flex:1;}
+
+/* ── OPTION PILLS ─────────────────────── */
+.option-pill{padding:8px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
+.option-pill.selected{background:var(--navy);border-color:var(--navy);color:#fff;}
+.size-btn{padding:7px 12px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;}
+.size-btn.active{background:var(--navy);border-color:var(--navy);color:#fff;}
+.option-row{display:flex;gap:6px;flex-wrap:wrap;}
+.disc-btn{flex:1;padding:9px;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;}
+.disc-btn.active{border-color:var(--green);color:var(--green);background:var(--green-light);}
+.discount-toggle{display:flex;gap:6px;margin-bottom:10px;}
+
+/* ── DIVIDER / TITLE ──────────────────── */
+.divider{height:1px;background:var(--border);margin:14px 0;}
+.section-title{font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
+.badge{display:inline-flex;align-items:center;justify-content:center;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;}
+.badge-navy{background:var(--navy-light);color:var(--navy);}
+.badge-green{background:var(--green-light);color:var(--green);}
+.badge-red{background:var(--red-light);color:var(--red);}
+
+/* ── HOME SCREEN ─────────────────────── */
+#screen-home .home-header{background:var(--card);border-bottom:1.5px solid var(--border);padding:calc(16px + var(--safe-t)) 20px 16px;box-shadow:var(--shadow-sm);}
+.home-brand{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;}
+.home-title{font-size:22px;font-weight:900;color:var(--text);letter-spacing:-.5px;}
+.home-content{padding:16px;}
+.home-section-label{font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
+
+.event-card{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:16px;margin-bottom:8px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);}
+.event-card:active{background:var(--bg2);transform:scale(.99);}
+.event-icon{width:44px;height:44px;background:var(--navy-light);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid var(--navy-mid);}
+.event-info{flex:1;min-width:0;}
+.event-name{font-size:14px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.event-meta{font-size:11px;color:var(--text2);}
+.event-currency{display:inline-block;margin-top:4px;font-size:10px;font-weight:700;color:var(--navy);background:var(--navy-light);border-radius:4px;padding:1px 6px;}
+.event-stats{text-align:right;flex-shrink:0;}
+.event-total{font-size:14px;font-weight:900;color:var(--total);}
+.event-orders{font-size:10px;color:var(--text3);margin-top:2px;}
+.event-actions{display:flex;gap:6px;margin-top:5px;justify-content:flex-end;}
+.event-del{background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;}
+.event-edit{background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;font-weight:700;}
+.add-event-btn{width:100%;padding:15px;background:none;border:2px dashed var(--border2);border-radius:14px;color:var(--text3);font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px;transition:all .15s;}
+.add-event-btn:active{border-color:var(--navy);color:var(--navy);}
+
+/* ── EVENT SCREEN ────────────────────── */
+.event-header{background:var(--card);border-bottom:1.5px solid var(--border);padding:calc(12px + var(--safe-t)) 16px 0;box-shadow:var(--shadow-sm);}
+.back-btn{background:none;border:none;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:4px;padding:4px 0;margin-bottom:10px;font-weight:600;}
+.event-header-title{font-size:16px;font-weight:900;color:var(--text);margin-bottom:1px;}
+.event-header-meta{font-size:11px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.currency-badge{font-size:10px;font-weight:800;color:var(--navy);background:var(--navy-light);border-radius:4px;padding:2px 7px;border:1px solid var(--navy-mid);}
+.tab-bar{display:flex;border-top:1.5px solid var(--border);margin-top:4px;}
+.tab-item{flex:1;padding:10px 4px;text-align:center;font-size:11px;font-weight:800;color:var(--text3);border-bottom:2.5px solid transparent;cursor:pointer;transition:all .15s;letter-spacing:.2px;}
+.tab-item.active{color:var(--navy);border-bottom-color:var(--navy);}
+
+/* ── ORDER TAB ───────────────────────── */
+.order-layout{display:flex;flex-direction:column;}
+@media(min-width:768px){.order-layout{flex-direction:row;height:calc(100vh - 135px);overflow:hidden;}}
+.products-panel{padding:14px;overflow-y:auto;}
+@media(min-width:768px){.products-panel{flex:1;overflow-y:auto;}}
+.cart-panel{background:var(--bg);border-top:1.5px solid var(--border);padding:14px;}
+@media(min-width:768px){.cart-panel{width:340px;border-top:none;border-left:1.5px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;padding:16px;}}
+@media(min-width:1200px){.cart-panel{width:400px;}}
+
+.product-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;}
+@media(min-width:480px){.product-grid{grid-template-columns:repeat(3,1fr);}}
+@media(min-width:768px){.product-grid{grid-template-columns:repeat(2,1fr);}}
+@media(min-width:1000px){.product-grid{grid-template-columns:repeat(3,1fr);}}
+@media(min-width:1200px){.product-grid{grid-template-columns:repeat(4,1fr);}}
+
+.product-btn{background:var(--card);border:1.5px solid var(--border);border-radius:11px;padding:13px 10px;text-align:center;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:5px;min-height:80px;justify-content:center;box-shadow:var(--shadow-sm);}
+.product-btn:active{background:var(--bg2);transform:scale(.96);border-color:var(--navy);}
+.product-btn-name{font-size:12px;font-weight:700;line-height:1.3;word-break:keep-all;color:var(--text);}
+.product-btn-price{font-size:13px;font-weight:900;color:var(--navy);}
+
+.cart-empty{text-align:center;padding:28px 16px;color:var(--text3);font-size:12px;}
+.cart-item{display:flex;align-items:flex-start;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);}
+.cart-item:last-child{border-bottom:none;}
+.cart-item-del{width:20px;height:20px;background:var(--red-light);border:none;border-radius:5px;color:var(--red);font-size:13px;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:2px;font-weight:700;}
+.cart-item-info{flex:1;min-width:0;}
+.cart-item-name{font-size:13px;font-weight:700;color:var(--text);}
+.cart-item-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+.cart-item-price{text-align:right;flex-shrink:0;}
+.cart-item-total{font-size:13px;font-weight:800;color:var(--text);}
+.cart-item-discount{font-size:10px;color:var(--green);margin-top:1px;font-weight:700;}
+.cart-item-original{font-size:10px;color:var(--text3);text-decoration:line-through;}
+
+.cart-totals{border-top:1.5px solid var(--border);padding-top:12px;margin-top:4px;}
+.cart-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;font-size:13px;color:var(--text2);}
+.cart-total-row.grand{font-size:20px;font-weight:900;color:var(--total);margin-top:10px;border-top:1.5px solid var(--border);padding-top:10px;}
+.complete-btn{width:100%;padding:15px;background:var(--navy);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-.3px;transition:all .15s;}
+.complete-btn:active{background:#253260;}
+.complete-btn:disabled{background:var(--bg2);color:var(--text3);cursor:not-allowed;}
+
+/* ── ADD TO CART MODAL ───────────────── */
+.qty-stepper{display:flex;align-items:center;gap:12px;justify-content:center;}
+.qty-btn{width:36px;height:36px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:20px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.qty-btn:active{background:var(--bg2);border-color:var(--navy);}
+.qty-val{font-size:22px;font-weight:900;min-width:40px;text-align:center;color:var(--text);}
+
+.preview-price{text-align:center;padding:14px;background:var(--total-light);border-radius:11px;margin-top:10px;border:1px solid rgba(184,85,53,0.15);}
+.preview-price .final{font-size:26px;font-weight:900;color:var(--total);}
+.preview-price .original{font-size:12px;color:var(--text3);text-decoration:line-through;margin-top:2px;}
+.preview-price .saved{font-size:11px;color:var(--green);margin-top:2px;font-weight:700;}
+
+/* ── PRODUCTS MANAGEMENT ─────────────── */
+.products-tab-content{padding:14px;}
+.product-list-item{display:flex;align-items:center;gap:12px;padding:13px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;margin-bottom:8px;box-shadow:var(--shadow-sm);}
+.product-list-icon{width:38px;height:38px;background:var(--navy-light);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.product-list-info{flex:1;min-width:0;}
+.product-list-name{font-size:14px;font-weight:800;color:var(--text);}
+.product-list-price{font-size:13px;color:var(--navy);font-weight:900;margin-top:2px;}
+.product-list-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+.product-tag{background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-size:10px;color:var(--text2);font-weight:600;}
+.product-list-del{background:none;border:none;color:var(--text3);font-size:17px;padding:4px;cursor:pointer;}
+
+/* ── HISTORY TAB ─────────────────────── */
+.history-tab-content{padding:14px;}
+.date-filter{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;}
+.date-chip{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s;}
+.date-chip.active{background:var(--navy);border-color:var(--navy);color:#fff;}
+.order-card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow-sm);}
+.order-card:active{background:var(--bg2);}
+.order-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.order-num{font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.5px;}
+.order-time{font-size:11px;color:var(--text2);margin-top:2px;}
+.order-total-big{font-size:18px;font-weight:900;color:var(--total);}
+.order-items-preview{font-size:11px;color:var(--text2);line-height:1.7;}
+
+/* ── SETTLEMENT ──────────────────────── */
+.settlement-content{padding:14px;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+@media(min-width:480px){.stat-grid{grid-template-columns:repeat(3,1fr);}}
+.stat-card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:14px;text-align:center;box-shadow:var(--shadow-sm);}
+.stat-val{font-size:20px;font-weight:900;color:var(--text);}
+.stat-label{font-size:10px;color:var(--text2);margin-top:3px;font-weight:700;letter-spacing:.3px;}
+.day-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);}
+.day-row:last-child{border-bottom:none;}
+.day-date{font-size:13px;font-weight:800;color:var(--text);}
+.day-meta{font-size:11px;color:var(--text2);margin-top:2px;}
+.day-amount{font-size:15px;font-weight:900;color:var(--total);}
+
+/* ── RECEIPT ─────────────────────────── */
+.receipt{background:#fff;color:#111;border-radius:12px;padding:20px;font-family:'Courier New',monospace;border:1px solid #E0DDD8;}
+.receipt-header{text-align:center;border-bottom:2px dashed #CCC;padding-bottom:12px;margin-bottom:12px;}
+.receipt-title{font-size:15px;font-weight:900;font-family:-apple-system,sans-serif;}
+.receipt-sub{font-size:11px;color:#888;margin-top:3px;font-family:-apple-system,sans-serif;}
+.receipt-item{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px dotted #EEE;}
+.receipt-item:last-child{border-bottom:none;}
+.receipt-total{border-top:2px dashed #CCC;margin-top:10px;padding-top:10px;}
+.receipt-total-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;font-family:-apple-system,sans-serif;}
+.receipt-total-row.grand{font-size:17px;font-weight:900;}
+.receipt-footer{text-align:center;margin-top:12px;font-size:10px;color:#999;border-top:1px dashed #CCC;padding-top:10px;font-family:-apple-system,sans-serif;}
+
+/* ── CONFIRM ORDER ───────────────────── */
+.confirm-total{text-align:center;padding:22px;background:var(--total-light);border-radius:14px;margin:14px 0;border:1px solid rgba(184,85,53,0.15);}
+.confirm-total-amount{font-size:38px;font-weight:900;color:var(--total);}
+.confirm-total-label{font-size:12px;color:var(--text2);margin-top:4px;font-weight:600;}
+.pay-btn{padding:12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;text-align:center;}
+.pay-btn:active{background:var(--bg2);}
+.pay-btn.selected{background:var(--navy);border-color:var(--navy);color:#fff;}
+
+/* ── EMPTY STATE ─────────────────────── */
+.empty-state{text-align:center;padding:40px 20px;}
+.empty-icon{font-size:36px;margin-bottom:12px;}
+.empty-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:6px;}
+.empty-desc{font-size:12px;color:var(--text2);line-height:1.7;}
+
+@media print{body *{display:none!important;}.receipt{display:block!important;position:fixed;top:0;left:0;width:100%;border:none;box-shadow:none;}}
+@keyframes slideUp{from{transform:translateY(16px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.slide-up{animation:slideUp .2s ease;}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HOME ═══ -->
+<div class="screen active" id="screen-home">
+  <div class="home-header">
+    <div class="home-brand">(주)에이엘티케이</div>
+    <div class="home-title">팝업 행사 POS</div>
+  </div>
+  <div class="scroll-area">
+    <div class="home-content">
+      <div class="home-section-label">행사 목록</div>
+      <div id="event-list"></div>
+      <button class="add-event-btn" onclick="openNewEventModal()">＋ 새 행사 추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ EVENT ═══ -->
+<div class="screen" id="screen-event">
+  <div class="event-header">
+    <button class="back-btn" onclick="goHome()">← 목록으로</button>
+    <div class="event-header-title" id="event-header-title"></div>
+    <div class="event-header-meta">
+      <span id="event-header-loc"></span>
+      <span class="currency-badge" id="event-currency-badge"></span>
+    </div>
+    <div class="tab-bar">
+      <div class="tab-item active" onclick="switchTab('order',this)">주문</div>
+      <div class="tab-item" onclick="switchTab('products',this)">상품</div>
+      <div class="tab-item" onclick="switchTab('history',this)">내역</div>
+      <div class="tab-item" onclick="switchTab('settlement',this)">정산</div>
+    </div>
+  </div>
+  <div class="scroll-area" id="event-scroll-area" style="padding-bottom:0">
+    <div id="tab-order" class="tab-content">
+      <div class="order-layout" id="order-layout">
+        <div class="products-panel">
+          <div class="section-title">상품 선택</div>
+          <div class="product-grid" id="product-grid"></div>
+        </div>
+        <div class="cart-panel">
+          <div class="section-title" style="padding-bottom:8px">장바구니</div>
+          <div id="cart-items-list"></div>
+          <div id="cart-totals-area"></div>
+          <button class="complete-btn" id="complete-btn" onclick="openConfirmOrder()" disabled>결제 완료</button>
+        </div>
+      </div>
+    </div>
+    <div id="tab-products" class="tab-content" style="display:none">
+      <div class="products-tab-content">
+        <button class="btn btn-primary btn-block" onclick="openAddProductModal()" style="margin-bottom:14px">＋ 상품 추가</button>
+        <div id="product-management-list"></div>
+      </div>
+    </div>
+    <div id="tab-history" class="tab-content" style="display:none">
+      <div class="history-tab-content">
+        <div class="date-filter" id="date-filter"></div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+    <div id="tab-settlement" class="tab-content" style="display:none">
+      <div class="settlement-content" id="settlement-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ MODAL: 행사 ═══ -->
+<div class="modal-overlay" id="modal-event">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-event-title">새 행사 추가</div>
+    <div class="form-group">
+      <label class="label">행사명 *</label>
+      <input class="input" id="inp-event-name" placeholder="예: 현대백화점 동탄점 팝업">
+    </div>
+    <div class="form-group">
+      <label class="label">장소</label>
+      <input class="input" id="inp-event-location" placeholder="예: B1 팝업존">
+    </div>
+    <div class="form-group">
+      <label class="label">통화 *</label>
+      <select class="select" id="inp-event-currency">
+        <option value="KRW">🇰🇷 한국 원 (₩ KRW)</option>
+        <option value="JPY">🇯🇵 일본 엔 (¥ JPY)</option>
+        <option value="USD">🇺🇸 미국 달러 ($ USD)</option>
+        <option value="CNY">🇨🇳 중국 위안 (¥ CNY)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="label">시작일</label>
+        <input class="input" type="date" id="inp-event-start">
+      </div>
+      <div class="form-group">
+        <label class="label">종료일</label>
+        <input class="input" type="date" id="inp-event-end">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-ghost btn-block" onclick="closeModal('modal-event')">취소</button>
+      <button class="btn btn-primary btn-block" onclick="saveEvent()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ MODAL: 상품 ═══ -->
+<div class="modal-overlay" id="modal-product">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-title">상품 추가</div>
+    <div class="form-group">
+      <label class="label">상품명 *</label>
+      <input class="input" id="inp-product-name" placeholder="예: 오버핏 반팔티">
+    </div>
+    <div class="form-group">
+      <label class="label">판매가 *</label>
+      <input class="input" type="number" id="inp-product-price" placeholder="35000">
+    </div>
+    <div class="form-group">
+      <label class="label">색상 (입력 후 Enter)</label>
+      <div class="tag-input-wrap" id="color-tag-wrap" onclick="document.getElementById('color-tag-input').focus()">
+        <input class="tag-input" id="color-tag-input" placeholder="화이트, 블랙...">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="label">사이즈</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="preset-sizes">
+        <button class="size-btn" onclick="togglePresetSize(this,'S')">S</button>
+        <button class="size-btn" onclick="togglePresetSize(this,'M')">M</button>
+        <button class="size-btn" onclick="togglePresetSize(this,'L')">L</button>
+        <button class="size-btn" onclick="togglePresetSize(this,'XL')">XL</button>
+        <button class="size-btn" onclick="togglePresetSize(this,'2XL')">2XL</button>
+        <button class="size-btn" onclick="togglePresetSize(this,'FREE')">FREE</button>
+      </div>
+      <div class="tag-input-wrap" id="size-tag-wrap" onclick="document.getElementById('size-tag-input').focus()">
+        <input class="tag-input" id="size-tag-input" placeholder="직접 입력 후 Enter...">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-ghost btn-block" onclick="closeModal('modal-product')">취소</button>
+      <button class="btn btn-primary btn-block" onclick="saveProduct()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ MODAL: 장바구니 ═══ -->
+<div class="modal-overlay" id="modal-cart">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="cart-modal-name"></div>
+    <div id="cart-modal-color-section" class="form-group">
+      <label class="label">색상</label>
+      <div class="option-row" id="cart-color-options"></div>
+    </div>
+    <div id="cart-modal-size-section" class="form-group">
+      <label class="label">사이즈</label>
+      <div class="option-row" id="cart-size-options"></div>
+    </div>
+    <div class="form-group">
+      <label class="label">수량</label>
+      <div class="qty-stepper">
+        <button class="qty-btn" onclick="changeQty(-1)">−</button>
+        <div class="qty-val" id="cart-qty">1</div>
+        <button class="qty-btn" onclick="changeQty(1)">＋</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="label">할인</label>
+      <div class="discount-toggle">
+        <button class="disc-btn active" id="disc-none" onclick="setDiscType('none')">없음</button>
+        <button class="disc-btn" id="disc-pct" onclick="setDiscType('pct')">% 할인</button>
+        <button class="disc-btn" id="disc-amt" onclick="setDiscType('amt')">금액 할인</button>
+      </div>
+      <input class="input" id="disc-value-input" placeholder="할인값 입력" type="number" min="0" style="display:none" oninput="updatePreview()">
+    </div>
+    <div class="preview-price" id="price-preview"></div>
+    <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="addToCart()">장바구니에 담기</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ MODAL: 결제 확인 ═══ -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-title">결제 확인</div>
+    <div class="confirm-total">
+      <div class="confirm-total-amount" id="confirm-amount"></div>
+      <div class="confirm-total-label">최종 결제 금액</div>
+    </div>
+    <div class="form-group">
+      <label class="label">결제 수단</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="payment-method-grid">
+        <button class="pay-btn" onclick="selectPayMethod(this,'신용카드')">💳 신용카드</button>
+        <button class="pay-btn" onclick="selectPayMethod(this,'현금')">💵 현금</button>
+        <button class="pay-btn" onclick="selectPayMethod(this,'계좌이체')">🏦 계좌이체</button>
+        <button class="pay-btn" onclick="selectPayMethod(this,'기타결제')">📱 기타결제</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="label">메모 (선택)</label>
+      <input class="input" id="order-memo" placeholder="특이사항 입력...">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-ghost btn-block" onclick="closeModal('modal-confirm')">취소</button>
+      <button class="btn btn-green btn-block" onclick="completeOrder()">✓ 결제 완료</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MODAL: 영수증 ═══ -->
+<div class="modal-overlay" id="modal-receipt">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="receipt" id="receipt-content"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-ghost btn-block" onclick="closeModal('modal-receipt')">닫기</button>
+      <button class="btn btn-primary btn-block" onclick="window.print()">🖨 인쇄</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CURRENCIES
+// ══════════════════════════════════════════════
+const CURRENCIES = {
+  KRW:{symbol:'₩',name:'원',dec:0,flag:'🇰🇷'},
+  JPY:{symbol:'¥',name:'엔',dec:0,flag:'🇯🇵'},
+  USD:{symbol:'$',name:'달러',dec:2,flag:'🇺🇸'},
+  CNY:{symbol:'¥',name:'위안',dec:2,flag:'🇨🇳'},
+};
+
+function fmt(n, cur){
+  cur = cur || (S.eventId ? (DB.getEvent(S.eventId)?.currency||'KRW') : 'KRW');
+  const c = CURRENCIES[cur]||CURRENCIES.KRW;
+  if(c.dec===0) return c.symbol + Math.round(n).toLocaleString('ko-KR');
+  return c.symbol + Number(n).toFixed(c.dec).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
+
+// ══════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════
+const DB = {
+  get(){return JSON.parse(localStorage.getItem('popupPOS')||'{"events":[]}');},
+  save(d){localStorage.setItem('popupPOS',JSON.stringify(d));},
+  getEvent(id){return this.get().events.find(e=>e.id===id);},
+  addEvent(ev){const d=this.get();ev.id='ev_'+Date.now();ev.products=[];ev.orders=[];d.events.unshift(ev);this.save(d);return ev;},
+  updateEvent(id,fields){const d=this.get();const i=d.events.findIndex(e=>e.id===id);Object.assign(d.events[i],fields);this.save(d);},
+  deleteEvent(id){const d=this.get();d.events=d.events.filter(e=>e.id!==id);this.save(d);},
+  addProduct(eid,p){const d=this.get();const ev=d.events.find(e=>e.id===eid);p.id='pr_'+Date.now();ev.products.push(p);this.save(d);return p;},
+  deleteProduct(eid,pid){const d=this.get();const ev=d.events.find(e=>e.id===eid);ev.products=ev.products.filter(p=>p.id!==pid);this.save(d);},
+  addOrder(eid,order){const d=this.get();const ev=d.events.find(e=>e.id===eid);order.id='ord_'+Date.now();ev.orders.push(order);this.save(d);return order;},
+};
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let S={eventId:null,tab:'order',cart:[],editingEventId:null,cartProduct:null,cartQty:1,cartDiscType:'none',historyDate:'all',colorTags:[],sizeTags:[]};
+const today=()=>new Date().toISOString().split('T')[0];
+const nowTime=()=>new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+
+function goHome(){S.cart=[];showScreen('screen-home');renderHome();}
+
+function openEvent(id){
+  S.eventId=id;S.cart=[];S.tab='order';
+  const ev=DB.getEvent(id);
+  const cur=CURRENCIES[ev.currency]||CURRENCIES.KRW;
+  document.getElementById('event-header-title').textContent=ev.name;
+  document.getElementById('event-header-loc').textContent=ev.location||'';
+  document.getElementById('event-currency-badge').textContent=cur.flag+' '+ev.currency;
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-item')[0].classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');
+  document.getElementById('tab-order').style.display='';
+  showScreen('screen-event');
+  renderProductGrid();renderCart();
+}
+
+function switchTab(tab,el){
+  S.tab=tab;
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');
+  document.getElementById('tab-'+tab).style.display='';
+  if(tab==='products')renderProductManagement();
+  if(tab==='history'){renderDateFilter();renderHistory();}
+  if(tab==='settlement')renderSettlement();
+}
+
+// ══════════════════════════════════════════════
+// HOME
+// ══════════════════════════════════════════════
+function renderHome(){
+  const {events}=DB.get();
+  const el=document.getElementById('event-list');
+  if(!events.length){
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">🏪</div><div class="empty-title">등록된 행사가 없습니다</div><div class="empty-desc">아래 버튼으로 첫 팝업 행사를<br>추가해보세요.</div></div>`;return;
+  }
+  el.innerHTML=events.map(ev=>{
+    const cur=CURRENCIES[ev.currency]||CURRENCIES.KRW;
+    const totalSales=ev.orders.reduce((s,o)=>s+o.total,0);
+    const dateStr=ev.startDate?ev.startDate.replace(/-/g,'.')+(ev.endDate&&ev.endDate!==ev.startDate?' ~ '+ev.endDate.replace(/-/g,'.'):''):'날짜 미설정';
+    return `<div class="event-card" onclick="openEvent('${ev.id}')">
+      <div class="event-icon">🏪</div>
+      <div class="event-info">
+        <div class="event-name">${ev.name}</div>
+        <div class="event-meta">${ev.location?ev.location+' · ':''}${dateStr}</div>
+        <span class="event-currency">${cur.flag} ${ev.currency||'KRW'}</span>
+      </div>
+      <div class="event-stats">
+        <div class="event-total">${totalSales>0?fmt(totalSales,ev.currency):'-'}</div>
+        <div class="event-orders">${ev.orders.length}건</div>
+        <div class="event-actions">
+          <button class="event-edit" onclick="event.stopPropagation();editEvent('${ev.id}')">수정</button>
+          <button class="event-del" onclick="event.stopPropagation();deleteEvent('${ev.id}')">삭제</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openNewEventModal(){
+  S.editingEventId=null;
+  document.getElementById('modal-event-title').textContent='새 행사 추가';
+  document.getElementById('inp-event-name').value='';
+  document.getElementById('inp-event-location').value='';
+  document.getElementById('inp-event-currency').value='KRW';
+  document.getElementById('inp-event-start').value=today();
+  document.getElementById('inp-event-end').value='';
+  openModal('modal-event');
+}
+
+function editEvent(id){
+  S.editingEventId=id;
+  const ev=DB.getEvent(id);
+  document.getElementById('modal-event-title').textContent='행사 수정';
+  document.getElementById('inp-event-name').value=ev.name||'';
+  document.getElementById('inp-event-location').value=ev.location||'';
+  document.getElementById('inp-event-currency').value=ev.currency||'KRW';
+  document.getElementById('inp-event-start').value=ev.startDate||'';
+  document.getElementById('inp-event-end').value=ev.endDate||'';
+  openModal('modal-event');
+}
+
+function saveEvent(){
+  const name=document.getElementById('inp-event-name').value.trim();
+  if(!name){alert('행사명을 입력해주세요.');return;}
+  const ev={name,location:document.getElementById('inp-event-location').value.trim(),currency:document.getElementById('inp-event-currency').value,startDate:document.getElementById('inp-event-start').value,endDate:document.getElementById('inp-event-end').value};
+  if(S.editingEventId)DB.updateEvent(S.editingEventId,ev);
+  else DB.addEvent(ev);
+  closeModal('modal-event');renderHome();
+}
+
+function deleteEvent(id){
+  if(!confirm('이 행사와 모든 주문 내역이 삭제됩니다. 계속하시겠습니까?'))return;
+  DB.deleteEvent(id);renderHome();
+}
+
+// ══════════════════════════════════════════════
+// PRODUCT GRID
+// ══════════════════════════════════════════════
+function renderProductGrid(){
+  const ev=DB.getEvent(S.eventId);
+  const grid=document.getElementById('product-grid');
+  if(!ev.products.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text3);font-size:12px">상품 탭에서 상품을 먼저 추가하세요</div>`;return;}
+  grid.innerHTML=ev.products.map(p=>`<button class="product-btn" onclick="openAddToCart('${p.id}')">
+    <div class="product-btn-name">${p.name}</div>
+    <div class="product-btn-price">${fmt(p.price,ev.currency)}</div>
+  </button>`).join('');
+}
+
+// ══════════════════════════════════════════════
+// CART
+// ══════════════════════════════════════════════
+function renderCart(){
+  const ev=DB.getEvent(S.eventId);
+  const cur=ev?.currency||'KRW';
+  const list=document.getElementById('cart-items-list');
+  const totals=document.getElementById('cart-totals-area');
+  const btn=document.getElementById('complete-btn');
+  if(!S.cart.length){list.innerHTML=`<div class="cart-empty">상품을 탭해서 추가하세요</div>`;totals.innerHTML='';btn.disabled=true;return;}
+  list.innerHTML=S.cart.map((item,i)=>{
+    const orig=item.price*item.qty;const hasDisc=orig!==item.lineTotal;
+    return `<div class="cart-item">
+      <button class="cart-item-del" onclick="removeCartItem(${i})">×</button>
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-sub">${[item.color,item.size].filter(Boolean).join(' / ')||'-'} · ${item.qty}개</div>
+      </div>
+      <div class="cart-item-price">
+        <div class="cart-item-total">${fmt(item.lineTotal,cur)}</div>
+        ${hasDisc?`<div class="cart-item-discount">-${fmt(orig-item.lineTotal,cur)}</div><div class="cart-item-original">${fmt(orig,cur)}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  const subtotal=S.cart.reduce((s,i)=>s+i.price*i.qty,0);
+  const discount=S.cart.reduce((s,i)=>s+(i.price*i.qty-i.lineTotal),0);
+  const total=subtotal-discount;
+  totals.innerHTML=`<div class="cart-totals">
+    <div class="cart-total-row"><span>소계</span><span>${fmt(subtotal,cur)}</span></div>
+    ${discount>0?`<div class="cart-total-row"><span style="color:var(--green)">할인</span><span style="color:var(--green)">−${fmt(discount,cur)}</span></div>`:''}
+    <div class="cart-total-row grand"><span>합계</span><span>${fmt(total,cur)}</span></div>
+  </div>`;
+  btn.disabled=false;
+}
+
+function removeCartItem(idx){S.cart.splice(idx,1);renderCart();}
+
+// ══════════════════════════════════════════════
+// ADD TO CART MODAL
+// ══════════════════════════════════════════════
+function openAddToCart(pid){
+  const ev=DB.getEvent(S.eventId);
+  const p=ev.products.find(x=>x.id===pid);
+  S.cartProduct=p;S.cartQty=1;S.cartDiscType='none';
+  document.getElementById('cart-modal-name').textContent=p.name;
+  const cs=document.getElementById('cart-modal-color-section');
+  if(p.colors&&p.colors.length){cs.style.display='';document.getElementById('cart-color-options').innerHTML=p.colors.map((c,i)=>`<button class="option-pill${i===0?' selected':''}" onclick="selectOption(this,'color')">${c}</button>`).join('');}
+  else cs.style.display='none';
+  const ss=document.getElementById('cart-modal-size-section');
+  if(p.sizes&&p.sizes.length){ss.style.display='';document.getElementById('cart-size-options').innerHTML=p.sizes.map((s,i)=>`<button class="option-pill${i===0?' selected':''}" onclick="selectOption(this,'size')">${s}</button>`).join('');}
+  else ss.style.display='none';
+  document.getElementById('cart-qty').textContent='1';
+  setDiscType('none');updatePreview();openModal('modal-cart');
+}
+
+function selectOption(el,type){el.closest('.option-row').querySelectorAll('.option-pill').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');updatePreview();}
+function changeQty(d){S.cartQty=Math.max(1,S.cartQty+d);document.getElementById('cart-qty').textContent=S.cartQty;updatePreview();}
+
+function setDiscType(t){
+  S.cartDiscType=t;
+  ['none','pct','amt'].forEach(x=>document.getElementById('disc-'+x).classList.toggle('active',x===t));
+  const inp=document.getElementById('disc-value-input');
+  if(t==='none'){inp.style.display='none';inp.value='';}
+  else{inp.style.display='';inp.placeholder=t==='pct'?'할인율 (%)':'할인금액';}
+  updatePreview();
+}
+
+function updatePreview(){
+  if(!S.cartProduct)return;
+  const ev=DB.getEvent(S.eventId);const cur=ev?.currency||'KRW';
+  const qty=S.cartQty||1;const base=S.cartProduct.price*qty;
+  let disc=0;const dv=parseFloat(document.getElementById('disc-value-input').value)||0;
+  if(S.cartDiscType==='pct')disc=base*(dv/100);
+  if(S.cartDiscType==='amt')disc=dv*qty;
+  disc=Math.min(Math.max(disc,0),base);
+  const final=base-disc;
+  document.getElementById('price-preview').innerHTML=`<div class="final">${fmt(final,cur)}</div>
+    ${disc>0?`<div class="original">${fmt(base,cur)}</div><div class="saved">−${fmt(disc,cur)} 할인</div>`:''}`;
+}
+
+function addToCart(){
+  const p=S.cartProduct;const qty=S.cartQty;
+  const colorEl=document.querySelector('#cart-color-options .selected');
+  const sizeEl=document.querySelector('#cart-size-options .selected');
+  const dv=parseFloat(document.getElementById('disc-value-input').value)||0;
+  const base=p.price*qty;let disc=0;
+  if(S.cartDiscType==='pct')disc=base*(dv/100);
+  if(S.cartDiscType==='amt')disc=dv*qty;
+  disc=Math.min(Math.max(disc,0),base);
+  S.cart.push({productId:p.id,name:p.name,color:colorEl?colorEl.textContent:'',size:sizeEl?sizeEl.textContent:'',price:p.price,qty,discType:S.cartDiscType,discValue:dv,lineTotal:base-disc});
+  closeModal('modal-cart');renderCart();
+}
+
+// ══════════════════════════════════════════════
+// COMPLETE ORDER
+// ══════════════════════════════════════════════
+function selectPayMethod(el,method){
+  document.querySelectorAll('.pay-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function openConfirmOrder(){
+  const ev=DB.getEvent(S.eventId);const cur=ev?.currency||'KRW';
+  const total=S.cart.reduce((s,i)=>s+i.lineTotal,0);
+  document.getElementById('confirm-amount').textContent=fmt(total,cur);
+  document.getElementById('order-memo').value='';
+  openModal('modal-confirm');
+}
+
+function completeOrder(){
+  const subtotal=S.cart.reduce((s,i)=>s+i.price*i.qty,0);
+  const discount=S.cart.reduce((s,i)=>s+(i.price*i.qty-i.lineTotal),0);
+  const total=subtotal-discount;
+  const payBtn=document.querySelector('.pay-btn.selected');
+  const payMethod=payBtn?payBtn.textContent.trim().replace(/^./u,'').trim():'';
+  const order={date:today(),time:nowTime(),items:S.cart.map(i=>({...i})),subtotal,discount,total,payMethod,memo:document.getElementById('order-memo').value.trim()};
+  DB.addOrder(S.eventId,order);
+  const ev=DB.getEvent(S.eventId);
+  const saved=ev.orders.slice().reverse().find(o=>o.total===order.total);
+  closeModal('modal-confirm');
+  S.cart=[];renderCart();renderProductGrid();
+  if(saved)showReceipt(saved.id);
+}
+
+// ══════════════════════════════════════════════
+// PRODUCT MANAGEMENT
+// ══════════════════════════════════════════════
+function renderProductManagement(){
+  const ev=DB.getEvent(S.eventId);const cur=ev?.currency||'KRW';
+  const el=document.getElementById('product-management-list');
+  if(!ev.products.length){el.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">등록된 상품 없음</div></div>`;return;}
+  el.innerHTML=ev.products.map(p=>`<div class="product-list-item">
+    <div class="product-list-icon">👕</div>
+    <div class="product-list-info">
+      <div class="product-list-name">${p.name}</div>
+      <div class="product-list-price">${fmt(p.price,cur)}</div>
+      <div class="product-list-tags">
+        ${(p.colors||[]).map(c=>`<span class="product-tag">🎨 ${c}</span>`).join('')}
+        ${(p.sizes||[]).map(s=>`<span class="product-tag">${s}</span>`).join('')}
+      </div>
+    </div>
+    <button class="product-list-del" onclick="deleteProduct('${p.id}')">🗑</button>
+  </div>`).join('');
+}
+
+function openAddProductModal(){
+  document.getElementById('inp-product-name').value='';
+  document.getElementById('inp-product-price').value='';
+  S.colorTags=[];S.sizeTags=[];
+  renderTagInput('color-tag-wrap','color-tag-input',S.colorTags);
+  renderTagInput('size-tag-wrap','size-tag-input',S.sizeTags);
+  document.querySelectorAll('#preset-sizes .size-btn').forEach(b=>b.classList.remove('active'));
+  openModal('modal-product');
+}
+
+function renderTagInput(wrapId,inputId,tags){
+  const wrap=document.getElementById(wrapId);const inputEl=document.getElementById(inputId);
+  wrap.innerHTML='';
+  tags.forEach((t,i)=>{const el=document.createElement('div');el.className='tag';el.innerHTML=`${t}<span class="tag-del" onclick="removeTag('${wrapId}','${inputId}',${i})">×</span>`;wrap.appendChild(el);});
+  wrap.appendChild(inputEl);
+  inputEl.onkeydown=function(e){if((e.key==='Enter'||e.key===',')&&this.value.trim()){e.preventDefault();tags.push(this.value.trim().replace(',',''));this.value='';renderTagInput(wrapId,inputId,tags);document.getElementById(inputId).focus();}};
+}
+
+function removeTag(wrapId,inputId,idx){const tags=wrapId.includes('color')?S.colorTags:S.sizeTags;tags.splice(idx,1);renderTagInput(wrapId,inputId,tags);}
+
+function togglePresetSize(btn,size){
+  btn.classList.toggle('active');
+  if(btn.classList.contains('active')){if(!S.sizeTags.includes(size))S.sizeTags.push(size);}
+  else S.sizeTags=S.sizeTags.filter(s=>s!==size);
+  renderTagInput('size-tag-wrap','size-tag-input',S.sizeTags);
+}
+
+function saveProduct(){
+  const name=document.getElementById('inp-product-name').value.trim();
+  const price=parseFloat(document.getElementById('inp-product-price').value);
+  if(!name)return alert('상품명을 입력하세요.');
+  if(!price||price<=0)return alert('올바른 가격을 입력하세요.');
+  DB.addProduct(S.eventId,{name,price,colors:[...S.colorTags],sizes:[...S.sizeTags]});
+  closeModal('modal-product');renderProductManagement();renderProductGrid();
+}
+
+function deleteProduct(pid){
+  if(!confirm('상품을 삭제하시겠습니까?'))return;
+  DB.deleteProduct(S.eventId,pid);renderProductManagement();renderProductGrid();
+}
+
+// ══════════════════════════════════════════════
+// HISTORY
+// ══════════════════════════════════════════════
+function renderDateFilter(){
+  const ev=DB.getEvent(S.eventId);
+  const dates=[...new Set(ev.orders.map(o=>o.date))].sort().reverse();
+  document.getElementById('date-filter').innerHTML=
+    `<div class="date-chip${S.historyDate==='all'?' active':''}" onclick="filterDate('all',this)">전체</div>`+
+    dates.map(d=>`<div class="date-chip${S.historyDate===d?' active':''}" onclick="filterDate('${d}',this)">${d.replace(/-/g,'.')}</div>`).join('');
+}
+
+function filterDate(d,el){S.historyDate=d;document.querySelectorAll('.date-chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderHistory();}
+
+function renderHistory(){
+  const ev=DB.getEvent(S.eventId);const cur=ev?.currency||'KRW';
+  let orders=ev.orders.slice().reverse();
+  if(S.historyDate!=='all')orders=orders.filter(o=>o.date===S.historyDate);
+  const el=document.getElementById('history-list');
+  if(!orders.length){el.innerHTML=`<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">주문 내역 없음</div></div>`;return;}
+  el.innerHTML=orders.map(o=>`<div class="order-card" onclick="showReceipt('${o.id}')">
+    <div class="order-card-header">
+      <div><div class="order-num"># ${o.id.slice(-4).toUpperCase()}</div><div class="order-time">${o.date.replace(/-/g,'.')} ${o.time}</div></div>
+      <div class="order-total-big">${fmt(o.total,cur)}</div>
+    </div>
+    <div class="order-items-preview">${o.items.map(i=>`${i.name}(${[i.color,i.size].filter(Boolean).join('/')||'-'})×${i.qty}`).join(' · ')}</div>
+    <div style="margin-top:7px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      ${o.payMethod?`<span style="font-size:10px;font-weight:700;color:var(--navy);background:var(--navy-light);border-radius:4px;padding:2px 7px;border:1px solid var(--navy-mid)">${o.payMethod}</span>`:''}
+      ${o.memo?`<span style="font-size:11px;color:var(--text3)">📝 ${o.memo}</span>`:''}
+    </div>
+  </div>`).join('');
+}
+
+// ══════════════════════════════════════════════
+// SETTLEMENT
+// ══════════════════════════════════════════════
+function renderSettlement(){
+  const ev=DB.getEvent(S.eventId);const cur=ev?.currency||'KRW';
+  const orders=ev.orders;const total=orders.reduce((s,o)=>s+o.total,0);
+  const totalDisc=orders.reduce((s,o)=>s+o.discount,0);
+  const dates=[...new Set(orders.map(o=>o.date))].sort().reverse();
+  document.getElementById('settlement-content').innerHTML=`
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-val" style="color:var(--total)">${fmt(total,cur)}</div><div class="stat-label">총 매출</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--navy)">${orders.length}</div><div class="stat-label">총 주문수</div></div>
+      <div class="stat-card"><div class="stat-val">${orders.length?fmt(total/orders.length,cur):'-'}</div><div class="stat-label">평균 주문액</div></div>
+    </div>
+    ${totalDisc>0?`<div class="card card-sm" style="margin-bottom:12px;display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">총 할인액</span><span style="font-size:14px;font-weight:900;color:var(--green)">−${fmt(totalDisc,cur)}</span></div>`:''}
+    <div class="card">
+      <div class="section-title" style="margin-bottom:10px">날짜별 정산</div>
+      ${dates.length?dates.map(d=>{
+        const do2=orders.filter(o=>o.date===d);const dt=do2.reduce((s,o)=>s+o.total,0);
+        return `<div class="day-row"><div><div class="day-date">${d.replace(/-/g,'.')}</div><div class="day-meta">${do2.length}건</div></div><div class="day-amount">${fmt(dt,cur)}</div></div>`;
+      }).join(''):`<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">주문 내역이 없습니다</div>`}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// RECEIPT
+// ══════════════════════════════════════════════
+function showReceipt(orderId){
+  const ev=DB.getEvent(S.eventId);const cur=ev?.currency||'KRW';const c=CURRENCIES[cur];
+  const o=ev.orders.find(x=>x.id===orderId);if(!o)return;
+  document.getElementById('receipt-content').innerHTML=`
+    <div class="receipt-header">
+      <div class="receipt-title">${ev.name}</div>
+      <div class="receipt-sub">${ev.location||'(주)에이엘티케이'}</div>
+      <div class="receipt-sub">${o.date.replace(/-/g,'.')} ${o.time} · #${o.id.slice(-4).toUpperCase()}</div>
+    </div>
+    ${o.items.map(i=>{const orig=i.price*i.qty;const hasDisc=orig!==i.lineTotal;
+      return `<div class="receipt-item">
+        <div><div>${i.name}</div><div style="font-size:10px;color:#888">${[i.color,i.size].filter(Boolean).join('/')||''} ×${i.qty}${hasDisc?' ★할인':''}</div></div>
+        <div style="text-align:right">${c.symbol}${i.lineTotal.toLocaleString()}${hasDisc?`<div style="font-size:9px;text-decoration:line-through;color:#bbb">${c.symbol}${orig.toLocaleString()}</div>`:''}</div>
+      </div>`;}).join('')}
+    <div class="receipt-total">
+      ${o.discount>0?`<div class="receipt-total-row"><span>소계</span><span>${fmt(o.subtotal,cur)}</span></div>
+      <div class="receipt-total-row"><span style="color:green">할인</span><span style="color:green">−${fmt(o.discount,cur)}</span></div>`:''}
+      <div class="receipt-total-row grand"><span>합계</span><span>${fmt(o.total,cur)}</span></div>
+    </div>
+    ${(o.payMethod||o.memo)?`<div style="margin-top:10px;border-top:1px dashed #ccc;padding-top:8px;font-size:11px;color:#666;">${o.payMethod?`💳 ${o.payMethod}`:''} ${o.memo?`· 📝 ${o.memo}`:''}</div>`:''}
+    <div class="receipt-footer">(주)에이엘티케이 · 감사합니다 ありがとうございました Thank you</div>`;
+  openModal('modal-receipt');
+}
+
+// ══════════════════════════════════════════════
+// MODAL UTILS
+// ══════════════════════════════════════════════
+function openModal(id){document.getElementById(id).classList.add('show');}
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');});});
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+renderHome();
+</script>
+</body>
+</html>
