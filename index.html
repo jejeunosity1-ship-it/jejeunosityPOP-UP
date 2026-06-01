@@ -610,6 +610,215 @@ button{cursor:pointer;}
   </div>
 </div>
 
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ── Firebase Config ──
+const firebaseConfig = {
+  apiKey: "AIzaSyDFqipR0Fzzxdy1JOIB4hUzDU1YwOKLfnA",
+  authDomain: "jejeunosity-1f4e2.firebaseapp.com",
+  projectId: "jejeunosity-1f4e2",
+  storageBucket: "jejeunosity-1f4e2.firebasestorage.app",
+  messagingSenderId: "121831836183",
+  appId: "1:121831836183:web:0d61fb554b7707bece2a52",
+  measurementId: "G-FTD8KW9G6V"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const POS_DOC = doc(db, 'popupPOS', 'data');
+const CFG_DOC = doc(db, 'popupPOS', 'config');
+
+// ── 로딩 오버레이 ──
+function showLoading(msg){
+  let el=document.getElementById('fs-loading');
+  if(!el){el=document.createElement('div');el.id='fs-loading';el.style.cssText='position:fixed;inset:0;background:rgba(247,243,236,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:-apple-system,sans-serif;';el.innerHTML='<div style="font-size:28px">🔄</div><div style="font-size:14px;font-weight:700;color:#2E3D6B" id="fs-loading-msg"></div>';document.body.appendChild(el);}
+  document.getElementById('fs-loading-msg').textContent=msg||'동기화 중...';
+}
+function hideLoading(){const el=document.getElementById('fs-loading');if(el)el.remove();}
+
+// ── 로컬 캐시 (오프라인 대비) ──
+let _posCache = null;
+let _cfgCache = null;
+
+// ── Firestore 실시간 리스너 ──
+let _unsubPos = null;
+let _unsubCfg = null;
+
+function startListeners(){
+  // POS 데이터 실시간 동기화
+  _unsubPos = onSnapshot(POS_DOC, snap => {
+    if(snap.exists()){
+      _posCache = snap.data();
+    } else {
+      _posCache = {events:[]};
+    }
+    // 현재 화면 갱신
+    try{ refreshCurrentView(); }catch(e){}
+  }, err => { console.warn('POS 리스너 오류:', err); });
+
+  // 설정 실시간 동기화
+  _unsubCfg = onSnapshot(CFG_DOC, snap => {
+    if(snap.exists()){
+      _cfgCache = snap.data();
+    }
+  }, err => { console.warn('CFG 리스너 오류:', err); });
+}
+
+function refreshCurrentView(){
+  const screen = document.querySelector('.screen.active')?.id;
+  if(screen === 'screen-home') renderHome();
+  else if(screen === 'screen-event'){
+    if(S.tab === 'order'){ renderProductGrid(); renderCategoryFilter(); }
+    else if(S.tab === 'products') renderProductManagement();
+    else if(S.tab === 'history'){ renderDateFilter(); renderHistory(); }
+    else if(S.tab === 'settlement') renderSettlement();
+  }
+}
+
+// ── POS DB ──
+window.FSDB = {
+  get(){
+    if(_posCache) return JSON.parse(JSON.stringify(_posCache));
+    const local = localStorage.getItem('popupPOS');
+    return local ? JSON.parse(local) : {events:[]};
+  },
+  async save(d){
+    _posCache = d;
+    localStorage.setItem('popupPOS', JSON.stringify(d)); // 로컬 백업
+    try{ await setDoc(POS_DOC, d); }
+    catch(e){ console.warn('Firestore 저장 실패(로컬 유지):', e); }
+  },
+  getEvent(id){ return this.get().events.find(e=>e.id===id); },
+  async addEvent(ev){
+    const d=this.get(); ev.id='ev_'+Date.now(); ev.products=[]; ev.orders=[];
+    d.events.unshift(ev); await this.save(d); return ev;
+  },
+  async updateEvent(id,fields){
+    const d=this.get(); const i=d.events.findIndex(e=>e.id===id);
+    Object.assign(d.events[i],fields); await this.save(d);
+  },
+  async deleteEvent(id){
+    const d=this.get(); d.events=d.events.filter(e=>e.id!==id); await this.save(d);
+  },
+  async addProduct(eid,p){
+    const d=this.get(); const ev=d.events.find(e=>e.id===eid);
+    p.id='pr_'+Date.now(); ev.products.push(p); await this.save(d); return p;
+  },
+  async updateProduct(eid,pid,fields){
+    const d=this.get(); const ev=d.events.find(e=>e.id===eid);
+    const pi=ev.products.findIndex(p=>p.id===pid);
+    Object.assign(ev.products[pi],fields); await this.save(d);
+  },
+  async deleteProduct(eid,pid){
+    const d=this.get(); const ev=d.events.find(e=>e.id===eid);
+    ev.products=ev.products.filter(p=>p.id!==pid); await this.save(d);
+  },
+  async addOrder(eid,order){
+    const d=this.get(); const ev=d.events.find(e=>e.id===eid);
+    order.id='ord_'+Date.now(); ev.orders.push(order); await this.save(d); return order;
+  },
+  async deductStock(eid,items){
+    const d=this.get(); const ev=d.events.find(e=>e.id===eid);
+    items.forEach(item=>{const p=ev.products.find(p=>p.id===item.productId);if(p&&p.stock!=null)p.stock=Math.max(0,p.stock-item.qty);});
+    await this.save(d);
+  },
+  async renameCategory(eid,oldCat,newCat){
+    const d=this.get(); const ev=d.events.find(e=>e.id===eid);
+    ev.products.forEach(p=>{if((p.category||'미분류')===oldCat)p.category=newCat;});
+    await this.save(d);
+  },
+};
+
+// ── CFG DB ──
+window.FSCFG = {
+  defaults(){return{
+    brandName:'(주)에이엘티케이',
+    receiptFooter:'감사합니다 ありがとうございました Thank you',
+    sizePresets:['18m','XS','S','M','L','XL','JS','JM','Free'],
+    categories:['상의','하의','아우터','원피스','악세서리'],
+    payMethods:['신용카드','현금','계좌이체','기타결제']
+  };},
+  get(){
+    if(_cfgCache) return JSON.parse(JSON.stringify(_cfgCache));
+    const local = localStorage.getItem('popupPOS_cfg');
+    return local ? JSON.parse(local) : this.defaults();
+  },
+  async save(cfg){
+    _cfgCache = cfg;
+    localStorage.setItem('popupPOS_cfg', JSON.stringify(cfg));
+    try{ await setDoc(CFG_DOC, cfg); }
+    catch(e){ console.warn('CFG 저장 실패:', e); }
+  },
+  async update(fields){
+    const c=this.get(); Object.assign(c,fields); await this.save(c);
+  },
+};
+
+// ── 초기화: 로컬 데이터 → Firestore 마이그레이션 ──
+async function initFirestore(){
+  showLoading('Firebase 연결 중...');
+  try {
+    const [posSnap, cfgSnap] = await Promise.all([getDoc(POS_DOC), getDoc(CFG_DOC)]);
+
+    // POS 데이터: Firestore 없으면 로컬 → 업로드
+    if(!posSnap.exists()){
+      const local = localStorage.getItem('popupPOS');
+      const localData = local ? JSON.parse(local) : {events:[]};
+      if(localData.events && localData.events.length > 0){
+        showLoading('기존 데이터 업로드 중...');
+        await setDoc(POS_DOC, localData);
+        _posCache = localData;
+      } else {
+        _posCache = {events:[]};
+      }
+    } else {
+      _posCache = posSnap.data();
+      // Firestore 데이터를 로컬에도 저장
+      localStorage.setItem('popupPOS', JSON.stringify(_posCache));
+    }
+
+    // CFG: Firestore 없으면 로컬 → 업로드
+    if(!cfgSnap.exists()){
+      const localCfg = localStorage.getItem('popupPOS_cfg');
+      const cfgData = localCfg ? JSON.parse(localCfg) : window.FSCFG.defaults();
+      await setDoc(CFG_DOC, cfgData);
+      _cfgCache = cfgData;
+    } else {
+      _cfgCache = cfgSnap.data();
+      localStorage.setItem('popupPOS_cfg', JSON.stringify(_cfgCache));
+    }
+
+    startListeners();
+    hideLoading();
+    renderHome();
+
+  } catch(err) {
+    console.error('Firebase 초기화 실패:', err);
+    hideLoading();
+    // 오프라인 fallback: 로컬스토리지로 동작
+    showOfflineBanner();
+    renderHome();
+  }
+}
+
+function showOfflineBanner(){
+  const el=document.createElement('div');
+  el.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#B85535;color:#fff;text-align:center;padding:8px;font-size:12px;font-weight:700;z-index:9998;';
+  el.textContent='⚠️ 오프라인 모드 — 데이터가 이 기기에만 저장됩니다';
+  document.body.appendChild(el);
+}
+
+// ── DB / CFG 별칭 (기존 코드와 호환) ──
+// async wrapper: 기존 동기 호출들을 async로 감쌈
+window._DB_READY = false;
+
+// App 시작
+initFirestore().then(()=>{ window._DB_READY = true; });
+
+</script>
 <script>
 // ══════════════════════════════════════
 // CURRENCIES
@@ -624,48 +833,31 @@ function fmt(n,cur){
 }
 
 // ══════════════════════════════════════
-// SETTINGS DB
+// SETTINGS DB → Firestore 위임
 // ══════════════════════════════════════
 const CFG={
-  defaults(){return{
-    brandName:'(주)에이엘티케이',
-    receiptFooter:'감사합니다 ありがとうございました Thank you',
-    sizePresets:['18m','XS','S','M','L','XL','JS','JM','Free'],
-    categories:['상의','하의','아우터','원피스','악세서리'],
-    payMethods:['신용카드','현금','계좌이체','기타결제']
-  };},
-  get(){
-    const d=localStorage.getItem('popupPOS_cfg');
-    return d?JSON.parse(d):this.defaults();
-  },
-  save(cfg){localStorage.setItem('popupPOS_cfg',JSON.stringify(cfg));},
-  update(fields){const c=this.get();Object.assign(c,fields);this.save(c);},
+  defaults(){return window.FSCFG?window.FSCFG.defaults():{brandName:'(주)에이엘티케이',receiptFooter:'감사합니다 ありがとうございました Thank you',sizePresets:['18m','XS','S','M','L','XL','JS','JM','Free'],categories:['상의','하의','아우터','원피스','악세서리'],payMethods:['신용카드','현금','계좌이체','기타결제']};},
+  get(){return window.FSCFG?window.FSCFG.get():this.defaults();},
+  save(cfg){if(window.FSCFG)window.FSCFG.save(cfg);else localStorage.setItem('popupPOS_cfg',JSON.stringify(cfg));},
+  update(fields){if(window.FSCFG)window.FSCFG.update(fields);else{const c=this.get();Object.assign(c,fields);this.save(c);}},
 };
 
 // ══════════════════════════════════════
-// DATA DB
+// DATA DB → Firestore 위임
 // ══════════════════════════════════════
 const DB={
-  get(){return JSON.parse(localStorage.getItem('popupPOS')||'{"events":[]}');},
-  save(d){localStorage.setItem('popupPOS',JSON.stringify(d));},
+  get(){return window.FSDB?window.FSDB.get():JSON.parse(localStorage.getItem('popupPOS')||'{"events":[]}');},
+  save(d){if(window.FSDB)window.FSDB.save(d);else localStorage.setItem('popupPOS',JSON.stringify(d));},
   getEvent(id){return this.get().events.find(e=>e.id===id);},
-  addEvent(ev){const d=this.get();ev.id='ev_'+Date.now();ev.products=[];ev.orders=[];d.events.unshift(ev);this.save(d);return ev;},
-  updateEvent(id,fields){const d=this.get();const i=d.events.findIndex(e=>e.id===id);Object.assign(d.events[i],fields);this.save(d);},
-  deleteEvent(id){const d=this.get();d.events=d.events.filter(e=>e.id!==id);this.save(d);},
-  addProduct(eid,p){const d=this.get();const ev=d.events.find(e=>e.id===eid);p.id='pr_'+Date.now();ev.products.push(p);this.save(d);return p;},
-  updateProduct(eid,pid,fields){const d=this.get();const ev=d.events.find(e=>e.id===eid);const pi=ev.products.findIndex(p=>p.id===pid);Object.assign(ev.products[pi],fields);this.save(d);},
-  deleteProduct(eid,pid){const d=this.get();const ev=d.events.find(e=>e.id===eid);ev.products=ev.products.filter(p=>p.id!==pid);this.save(d);},
-  addOrder(eid,order){const d=this.get();const ev=d.events.find(e=>e.id===eid);order.id='ord_'+Date.now();ev.orders.push(order);this.save(d);return order;},
-  deductStock(eid,items){
-    const d=this.get();const ev=d.events.find(e=>e.id===eid);
-    items.forEach(item=>{const p=ev.products.find(p=>p.id===item.productId);if(p&&p.stock!=null)p.stock=Math.max(0,p.stock-item.qty);});
-    this.save(d);
-  },
-  renameCategory(eid,oldCat,newCat){
-    const d=this.get();const ev=d.events.find(e=>e.id===eid);
-    ev.products.forEach(p=>{if((p.category||'미분류')===oldCat)p.category=newCat;});
-    this.save(d);
-  },
+  addEvent(ev){if(window.FSDB)return window.FSDB.addEvent(ev);const d=this.get();ev.id='ev_'+Date.now();ev.products=[];ev.orders=[];d.events.unshift(ev);this.save(d);return ev;},
+  updateEvent(id,fields){if(window.FSDB)return window.FSDB.updateEvent(id,fields);const d=this.get();const i=d.events.findIndex(e=>e.id===id);Object.assign(d.events[i],fields);this.save(d);},
+  deleteEvent(id){if(window.FSDB)return window.FSDB.deleteEvent(id);const d=this.get();d.events=d.events.filter(e=>e.id!==id);this.save(d);},
+  addProduct(eid,p){if(window.FSDB)return window.FSDB.addProduct(eid,p);const d=this.get();const ev=d.events.find(e=>e.id===eid);p.id='pr_'+Date.now();ev.products.push(p);this.save(d);return p;},
+  updateProduct(eid,pid,fields){if(window.FSDB)return window.FSDB.updateProduct(eid,pid,fields);const d=this.get();const ev=d.events.find(e=>e.id===eid);const pi=ev.products.findIndex(p=>p.id===pid);Object.assign(ev.products[pi],fields);this.save(d);},
+  deleteProduct(eid,pid){if(window.FSDB)return window.FSDB.deleteProduct(eid,pid);const d=this.get();const ev=d.events.find(e=>e.id===eid);ev.products=ev.products.filter(p=>p.id!==pid);this.save(d);},
+  addOrder(eid,order){if(window.FSDB)return window.FSDB.addOrder(eid,order);const d=this.get();const ev=d.events.find(e=>e.id===eid);order.id='ord_'+Date.now();ev.orders.push(order);this.save(d);return order;},
+  deductStock(eid,items){if(window.FSDB)return window.FSDB.deductStock(eid,items);const d=this.get();const ev=d.events.find(e=>e.id===eid);items.forEach(item=>{const p=ev.products.find(p=>p.id===item.productId);if(p&&p.stock!=null)p.stock=Math.max(0,p.stock-item.qty);});this.save(d);},
+  renameCategory(eid,oldCat,newCat){if(window.FSDB)return window.FSDB.renameCategory(eid,oldCat,newCat);const d=this.get();const ev=d.events.find(e=>e.id===eid);ev.products.forEach(p=>{if((p.category||'미분류')===oldCat)p.category=newCat;});this.save(d);},
 };
 
 // ══════════════════════════════════════
@@ -1359,23 +1551,28 @@ function exportAllData(){
   const data={pos:DB.get(),cfg:CFG.get()};
   downloadFile(JSON.stringify(data,null,2),'application/json',`popupPOS_backup_${today()}.json`);
 }
-function importAllData(event){
+async function importAllData(event){
   const file=event.target.files[0];if(!file)return;
   const reader=new FileReader();
-  reader.onload=function(e){
+  reader.onload=async function(e){
     try{
       const data=JSON.parse(e.target.result);
-      if(data.pos)localStorage.setItem('popupPOS',JSON.stringify(data.pos));
-      if(data.cfg)localStorage.setItem('popupPOS_cfg',JSON.stringify(data.cfg));
-      alert('데이터를 성공적으로 복원했습니다.');renderSettings();
+      if(data.pos && window.FSDB){ await window.FSDB.save(data.pos); }
+      else if(data.pos){ localStorage.setItem('popupPOS',JSON.stringify(data.pos)); }
+      if(data.cfg && window.FSCFG){ await window.FSCFG.save(data.cfg); }
+      else if(data.cfg){ localStorage.setItem('popupPOS_cfg',JSON.stringify(data.cfg)); }
+      alert('데이터를 성공적으로 복원했습니다.');renderSettings();renderHome();
     }catch(err){alert('파일 형식이 올바르지 않습니다.');}
   };
   reader.readAsText(file);
 }
-function resetAllData(){
+async function resetAllData(){
   if(!confirm('정말 모든 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.'))return;
   if(!confirm('마지막 확인: 전체 행사·주문·상품 데이터가 모두 삭제됩니다.'))return;
-  localStorage.removeItem('popupPOS');alert('초기화 완료.');goHome();
+  const empty={events:[]};
+  if(window.FSDB) await window.FSDB.save(empty);
+  localStorage.removeItem('popupPOS');
+  alert('초기화 완료.');goHome();
 }
 
 // ══════════════════════════════════════
@@ -1386,9 +1583,9 @@ function closeModal(id){document.getElementById(id).classList.remove('show');}
 document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');});});
 
 // ══════════════════════════════════════
-// INIT
+// INIT — Firebase 모듈이 먼저 실행 후 renderHome() 호출
+// (위 type="module" 스크립트의 initFirestore()가 담당)
 // ══════════════════════════════════════
-renderHome();
 </script>
 </body>
 </html>
